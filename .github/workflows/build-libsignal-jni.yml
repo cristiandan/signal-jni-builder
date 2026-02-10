@@ -34,7 +34,7 @@ jobs:
             apt_retry install -y --fix-missing git curl unzip build-essential \
               openjdk-21-jdk-headless protobuf-compiler pkg-config cmake clang wget
             
-            # Install Android SDK + NDK
+            # Install Android SDK + NDK (needed during Gradle configuration)
             mkdir -p /opt/android-sdk/cmdline-tools
             cd /opt/android-sdk/cmdline-tools
             wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
@@ -50,20 +50,20 @@ jobs:
             curl -fsSL https://sh.rustup.rs | sh -s -- -y
             . $HOME/.cargo/env
             
-            # Clone and build
-            git clone https://github.com/signalapp/libsignal.git /work/libsignal
-            cd /work/libsignal/java
+            # Clone and build (use libsignal-client, which has the makeJniLibrariesDesktop task)
+            git clone https://github.com/signalapp/libsignal-client.git /work/libsignal-client
+            cd /work/libsignal-client/java
             
             # Configure for low-memory build
             mkdir -p $HOME/.cargo
             printf "[build]\njobs = 1\n" > $HOME/.cargo/config.toml
             export RUSTFLAGS="-Ccodegen-units=1"
             
-            # Build desktop JNI only (skip android tasks)
-            ./gradlew --no-daemon :client:makeJniLibrariesDesktop -x :android:compileDebugKotlin -x :android:compileReleaseKotlin
+            # Build desktop JNI
+            ./gradlew --no-daemon :makeJniLibrariesDesktop
             
             # Copy output
-            find /work/libsignal/java -name "libsignal_jni*.so" -exec cp {} /out/ \;
+            find /work/libsignal-client/java -name "libsignal_jni*.so" -exec cp {} /out/ \;
           '
       - name: Upload artifact
         uses: actions/upload-artifact@v4
