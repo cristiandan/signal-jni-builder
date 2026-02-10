@@ -1,0 +1,68 @@
+name: Build libsignal_jni (Linux ARM64)
+on:
+  workflow_dispatch:
+
+jobs:
+  build-arm64-hosted:
+    name: Hosted ARM64 (if available)
+    runs-on: ubuntu-22.04-arm64
+    continue-on-error: true
+    steps:
+      - name: Checkout libsignal-client
+        run: git clone https://github.com/signalapp/libsignal-client.git libsignal-client
+      - name: Install deps
+        run: |
+          sudo apt update
+          sudo apt install -y git curl unzip build-essential \
+            openjdk-21-jdk-headless protobuf-compiler pkg-config cmake clang
+      - name: Install Rust
+        run: |
+          curl -fsSL https://sh.rustup.rs | sh -s -- -y
+          echo 'source $HOME/.cargo/env' >> $GITHUB_ENV
+      - name: Build desktop JNI
+        run: |
+          source $HOME/.cargo/env
+          cd libsignal-client/java
+          mkdir -p $HOME/.cargo
+          printf "[build]\njobs = 1\n" > $HOME/.cargo/config.toml
+          export RUSTFLAGS="-Ccodegen-units=1"
+          ./gradlew --no-daemon --info :makeJniLibrariesDesktop
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libsignal_jni-linux-arm64
+          path: libsignal-client/java/build/**/libsignal_jni*.so
+
+  build-qemu-fallback:
+    name: QEMU/Buildx fallback
+    runs-on: ubuntu-22.04
+    needs: build-arm64-hosted
+    if: always() && needs.build-arm64-hosted.result != 'success'
+    steps:
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Prepare workspace
+        run: mkdir -p $GITHUB_WORKSPACE/out
+      - name: Run ARM64 build container
+        run: |
+          docker run --platform=linux/arm64 -v "$GITHUB_WORKSPACE/out:/out" --rm ubuntu:22.04 bash -lc '
+            set -e
+            apt update && apt install -y git curl unzip build-essential \
+              openjdk-21-jdk-headless protobuf-compiler pkg-config cmake clang
+            curl -fsSL https://sh.rustup.rs | sh -s -- -y
+            . $HOME/.cargo/env
+            git clone https://github.com/signalapp/libsignal-client.git /work/libsignal-client
+            cd /work/libsignal-client/java
+            mkdir -p $HOME/.cargo
+            printf "[build]\njobs = 1\n" > $HOME/.cargo/config.toml
+            export RUSTFLAGS="-Ccodegen-units=1"
+            ./gradlew --no-daemon --info :makeJniLibrariesDesktop
+            find /work/libsignal-client/java/build -name "libsignal_jni*.so" -exec cp {} /out/ \;
+          '
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libsignal_jni-linux-arm64
+          path: out/*.so
