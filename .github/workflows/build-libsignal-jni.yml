@@ -18,8 +18,20 @@ jobs:
           docker run --platform=linux/arm64 -v "$GITHUB_WORKSPACE/out:/out" --rm ubuntu:22.04 bash -lc '
             set -e
             
-            # Install base deps
-            apt update && apt install -y git curl unzip build-essential \
+            # Retry function for apt
+            apt_retry() {
+              for i in 1 2 3 4 5; do
+                apt-get "$@" && return 0
+                echo "apt failed, retrying in 10s... (attempt $i/5)"
+                sleep 10
+                apt-get update
+              done
+              return 1
+            }
+            
+            # Install base deps with retry
+            apt-get update
+            apt_retry install -y --fix-missing git curl unzip build-essential \
               openjdk-21-jdk-headless protobuf-compiler pkg-config cmake clang wget
             
             # Install Android SDK + NDK
