@@ -29,10 +29,17 @@ jobs:
               return 1
             }
             
-            # Install base deps with retry
+            # Install base deps with retry (skip old protobuf-compiler)
             apt-get update
             apt_retry install -y --fix-missing git curl unzip build-essential \
-              openjdk-21-jdk-headless protobuf-compiler pkg-config cmake clang wget
+              openjdk-21-jdk-headless pkg-config cmake clang wget
+            
+            # Install newer protoc (v25.x supports proto3 optional natively)
+            PROTOC_VERSION=25.1
+            wget -q https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-aarch_64.zip -O /tmp/protoc.zip
+            unzip -q /tmp/protoc.zip -d /usr/local
+            rm /tmp/protoc.zip
+            protoc --version
             
             # Install Android SDK + NDK (needed during Gradle configuration)
             mkdir -p /opt/android-sdk/cmdline-tools
@@ -50,7 +57,7 @@ jobs:
             curl -fsSL https://sh.rustup.rs | sh -s -- -y
             . $HOME/.cargo/env
             
-            # Clone and build (use libsignal-client, which has the makeJniLibrariesDesktop task)
+            # Clone and build
             git clone https://github.com/signalapp/libsignal-client.git /work/libsignal-client
             cd /work/libsignal-client/java
             
