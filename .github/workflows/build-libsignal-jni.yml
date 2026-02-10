@@ -18,20 +18,12 @@ jobs:
           docker run --platform=linux/arm64 -v "$GITHUB_WORKSPACE/out:/out" --rm ubuntu:22.04 bash -lc '
             set -e
             
-            # Retry function for apt
-            apt_retry() {
-              for i in 1 2 3 4 5; do
-                apt-get "$@" && return 0
-                echo "apt failed, retrying in 10s... (attempt $i/5)"
-                sleep 10
-                apt-get update
-              done
-              return 1
-            }
-            
-            # Install base deps with retry (skip old protobuf-compiler)
+            # Fix any broken deps first
             apt-get update
-            apt_retry install -y --fix-missing git curl unzip build-essential \
+            apt-get -y --fix-broken install
+            
+            # Install base deps
+            apt-get install -y git curl unzip build-essential \
               openjdk-21-jdk-headless pkg-config cmake clang wget
             
             # Install newer protoc (v25.x supports proto3 optional natively)
